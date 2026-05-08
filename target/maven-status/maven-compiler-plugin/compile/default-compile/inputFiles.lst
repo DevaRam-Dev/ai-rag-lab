@@ -1,0 +1,11 @@
+/home/deva/Projects/CursorAI_Projects/RAG/ai-rag-lab/src/main/java/com/raglab/repository/DocChunkRepository.java
+/home/deva/Projects/CursorAI_Projects/RAG/ai-rag-lab/src/main/java/com/raglab/service/PdfChunkingService.java
+/home/deva/Projects/CursorAI_Projects/RAG/ai-rag-lab/src/main/java/com/raglab/entity/DocChunk.java
+/home/deva/Projects/CursorAI_Projects/RAG/ai-rag-lab/src/main/java/com/raglab/dto/QueryResponse.java
+/home/deva/Projects/CursorAI_Projects/RAG/ai-rag-lab/src/main/java/com/raglab/controller/IngestionController.java
+/home/deva/Projects/CursorAI_Projects/RAG/ai-rag-lab/src/main/java/com/raglab/service/IngestionService.java
+/home/deva/Projects/CursorAI_Projects/RAG/ai-rag-lab/src/main/java/com/raglab/BasicPdfRagApplication.java
+/home/deva/Projects/CursorAI_Projects/RAG/ai-rag-lab/src/main/java/com/raglab/dto/QueryRequest.java
+/home/deva/Projects/CursorAI_Projects/RAG/ai-rag-lab/src/main/java/com/raglab/controller/QueryController.java
+/home/deva/Projects/CursorAI_Projects/RAG/ai-rag-lab/src/main/java/com/raglab/service/EmbeddingService.java
+/home/deva/Projects/CursorAI_Projects/RAG/ai-rag-lab/src/main/java/com/raglab/service/QueryService.java
