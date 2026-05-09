@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RAG — PDF Question Answering</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: #0d1b2a;
+      color: #fff;
+      padding: 16px 32px;
+      font-size: 1.25rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+
+    .app-body {
+      display: flex;
+      flex: 1;
+      gap: 20px;
+      padding: 24px;
+      align-items: flex-start;
+    }
+
+    .panel {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+      padding: 24px;
+    }
+
+    .panel-upload  { flex: 0 0 40%; }
+    .panel-chat    { flex: 0 0 60%; }
+
+    .panel-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 18px;
+      color: #1a237e;
+    }
+
+    label.file-label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 0.85rem;
+      color: #555;
+      font-weight: 500;
+    }
+
+    input[type="file"] {
+      display: block;
+      width: 100%;
+      padding: 8px;
+      border: 1.5px dashed #90a4ae;
+      border-radius: 6px;
+      background: #f9fafb;
+      margin-bottom: 12px;
+      cursor: pointer;
+      font-size: 0.875rem;
+    }
+
+    textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px solid #cfd8dc;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      resize: vertical;
+      margin-bottom: 12px;
+      transition: border-color 0.2s;
+    }
+    textarea:focus { outline: none; border-color: #1976d2; }
+
+    button.btn {
+      display: inline-block;
+      background: #1976d2;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 22px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.18s, opacity 0.18s;
+    }
+    button.btn:hover:not(:disabled) { background: #1565c0; }
+    button.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    .status-msg {
+      margin-top: 12px;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+    .status-msg.success { color: #2e7d32; }
+    .status-msg.error   { color: #c62828; font-weight: 500; }
+    .status-msg.info    { color: #1565c0; }
+
+    .divider {
+      border: none;
+      border-top: 1.5px solid #eceff1;
+      margin: 22px 0;
+    }
+
+    .doc-list { list-style: none; }
+    .doc-list li {
+      padding: 7px 4px;
+      border-bottom: 1px solid #f1f3f4;
+      font-size: 0.88rem;
+      color: #37474f;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .doc-list li:last-child { border-bottom: none; }
+
+    .answer-box {
+      background: #e3f2fd;
+      border-left: 4px solid #1976d2;
+      border-radius: 6px;
+      padding: 14px 16px;
+      margin-top: 16px;
+      font-size: 0.95rem;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .sources-toggle {
+      margin-top: 14px;
+      cursor: pointer;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #1976d2;
+      user-select: none;
+      background: none;
+      border: none;
+      padding: 0;
+      text-align: left;
+    }
+    .sources-toggle:hover { text-decoration: underline; }
+
+    .source-chunk {
+      background: #eceff1;
+      border-radius: 5px;
+      padding: 10px 12px;
+      margin-top: 8px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 0.80rem;
+      color: #37474f;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.5;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border: 3px solid #bbdefb;
+      border-top-color: #1976d2;
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-row {
+      display: flex;
+      align-items: center;
+      margin-top: 14px;
+      color: #1565c0;
+      font-size: 0.9rem;
+    }
+
+    @media (max-width: 768px) {
+      .app-body {
+        flex-direction: column;
+        padding: 16px;
+      }
+      .panel-upload, .panel-chat { flex: none; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const API_BASE = "http://localhost:8080";
+
+    /* ── Upload Panel ──────────────────────────────────────────── */
+    function UploadPanel() {
+      const [file, setFile]         = React.useState(null);
+      const [uploading, setUploading] = React.useState(false);
+      const [uploadMsg, setUploadMsg] = React.useState(null); // {text, type}
+      const [docs, setDocs]         = React.useState([]);
+      const [docsError, setDocsError] = React.useState(null);
+      const fileRef = React.useRef();
+
+      const fetchDocs = React.useCallback(async () => {
+        try {
+          const res = await fetch(`${API_BASE}/api/documents`);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          setDocs(Array.isArray(data) ? data : []);
+          setDocsError(null);
+        } catch (err) {
+          setDocsError(`Failed to load documents: ${err.message}`);
+        }
+      }, []);
+
+      React.useEffect(() => { fetchDocs(); }, [fetchDocs]);
+
+      const handleUpload = async () => {
+        if (!file) return;
+        setUploading(true);
+        setUploadMsg({ text: "Uploading…", type: "info" });
+
+        const form = new FormData();
+        form.append("file", file);
+
+        try {
+          const res = await fetch(`${API_BASE}/api/ingest`, {
+            method: "POST",
+            body: form,
+          });
+          if (!res.ok) {
+            const errText = await res.text().catch(() => res.statusText);
+            throw new Error(errText || `HTTP ${res.status}`);
+          }
+          const data = await res.json();
+          const chunks = data.chunks ?? data.chunkCount ?? "?";
+          setUploadMsg({
+            text: `✅ Ingested ${chunks} chunks from ${file.name}`,
+            type: "success",
+          });
+          setFile(null);
+          if (fileRef.current) fileRef.current.value = "";
+          fetchDocs();
+        } catch (err) {
+          setUploadMsg({ text: `Upload failed: ${err.message}`, type: "error" });
+        } finally {
+          setUploading(false);
+        }
+      };
+
+      return (
+        <div className="panel panel-upload">
+          <div className="panel-title">📄 Upload PDF</div>
+
+          <label className="file-label" htmlFor="pdf-input">Select a PDF file</label>
+          <input
+            id="pdf-input"
+            ref={fileRef}
+            type="file"
+            accept=".pdf"
+            onChange={e => { setFile(e.target.files[0] || null); setUploadMsg(null); }}
+          />
+
+          <button
+            className="btn"
+            onClick={handleUpload}
+            disabled={!file || uploading}
+          >
+            {uploading ? "Uploading…" : "Upload"}
+          </button>
+
+          {uploadMsg && (
+            <div className={`status-msg ${uploadMsg.type}`}>{uploadMsg.text}</div>
+          )}
+
+          <hr className="divider" />
+
+          <div className="panel-title" style={{ marginBottom: 12 }}>📚 Uploaded Documents</div>
+
+          {docsError && <div className="status-msg error">{docsError}</div>}
+
+          {!docsError && docs.length === 0 && (
+            <div className="status-msg info">No documents uploaded yet.</div>
+          )}
+
+          {docs.length > 0 && (
+            <ul className="doc-list">
+              {docs.map((name, i) => (
+                <li key={i}><span>📄</span>{name}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      );
+    }
+
+    /* ── Chat Panel ────────────────────────────────────────────── */
+    function ChatPanel() {
+      const [question, setQuestion]   = React.useState("");
+      const [loading, setLoading]     = React.useState(false);
+      const [answer, setAnswer]       = React.useState(null);
+      const [sources, setSources]     = React.useState([]);
+      const [showSources, setShowSources] = React.useState(false);
+      const [chatError, setChatError] = React.useState(null);
+
+      const handleAsk = async () => {
+        const q = question.trim();
+        if (!q) return;
+        setLoading(true);
+        setAnswer(null);
+        setSources([]);
+        setShowSources(false);
+        setChatError(null);
+
+        try {
+          const res = await fetch(`${API_BASE}/api/query`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ question: q }),
+          });
+          if (!res.ok) {
+            const errText = await res.text().catch(() => res.statusText);
+            throw new Error(errText || `HTTP ${res.status}`);
+          }
+          const data = await res.json();
+          setAnswer(data.answer ?? data.response ?? JSON.stringify(data));
+          setSources(Array.isArray(data.sources) ? data.sources : []);
+        } catch (err) {
+          setChatError(`Request failed: ${err.message}`);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const handleKeyDown = e => {
+        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleAsk();
+      };
+
+      return (
+        <div className="panel panel-chat">
+          <div className="panel-title">💬 Ask a Question</div>
+
+          <textarea
+            rows={3}
+            placeholder="Type your question here… (Ctrl+Enter to submit)"
+            value={question}
+            onChange={e => setQuestion(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={loading}
+          />
+
+          <button
+            className="btn"
+            onClick={handleAsk}
+            disabled={!question.trim() || loading}
+          >
+            Ask
+          </button>
+
+          {loading && (
+            <div className="loading-row">
+              <span className="spinner" />
+              Searching for an answer…
+            </div>
+          )}
+
+          {chatError && (
+            <div className="status-msg error" style={{ marginTop: 14 }}>{chatError}</div>
+          )}
+
+          {answer !== null && (
+            <>
+              <div className="answer-box">{answer}</div>
+
+              {sources.length > 0 && (
+                <>
+                  <button
+                    className="sources-toggle"
+                    onClick={() => setShowSources(v => !v)}
+                  >
+                    📎 Source Chunks ({sources.length}) {showSources ? "▲" : "▼"}
+                  </button>
+
+                  {showSources && sources.map((chunk, i) => (
+                    <div key={i} className="source-chunk">
+                      {typeof chunk === "string" ? chunk : chunk.text ?? JSON.stringify(chunk)}
+                    </div>
+                  ))}
+                </>
+              )}
+            </>
+          )}
+        </div>
+      );
+    }
+
+    /* ── App root ──────────────────────────────────────────────── */
+    function App() {
+      return (
+        <>
+          <header>🧠 RAG — PDF Question Answering</header>
+          <div className="app-body">
+            <UploadPanel />
+            <ChatPanel />
+          </div>
+        </>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>

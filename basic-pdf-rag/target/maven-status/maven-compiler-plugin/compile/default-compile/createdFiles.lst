@@ -1,0 +1,13 @@
+com/raglab/repository/DocChunkRepository.class
+com/raglab/controller/IngestionController.class
+com/raglab/service/QueryService.class
+com/raglab/controller/QueryController.class
+com/raglab/service/IngestionService.class
+com/raglab/service/PdfChunkingService.class
+com/raglab/entity/DocChunk$DocChunkBuilder.class
+com/raglab/service/EmbeddingService.class
+com/raglab/entity/DocChunk.class
+com/raglab/BasicPdfRagApplication.class
+com/raglab/dto/QueryResponse.class
+com/raglab/dto/QueryRequest.class
+com/raglab/dto/QueryResponse$QueryResponseBuilder.class

@@ -37,7 +37,7 @@ public interface DocChunkRepository extends JpaRepository<DocChunk, Long> {
      */
     @Query(
         value = "SELECT * FROM doc_chunks " +
-                "ORDER BY ('[' || embedding || ']')::vector <=> ('[' || :queryEmbedding || ']')::vector " +
+                "ORDER BY CAST('[' || embedding || ']' AS vector) <=> CAST('[' || :queryEmbedding || ']' AS vector) " +
                 "LIMIT :limit",
         nativeQuery = true
     )
