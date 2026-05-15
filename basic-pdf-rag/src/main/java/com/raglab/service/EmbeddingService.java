@@ -13,9 +13,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.LocalDateTime;
-import java.util.Arrays;
-import java.util.stream.Collectors;
 
 /**
  * Service responsible for generating dense vector embeddings from text using the Ollama API.
@@ -45,7 +42,9 @@ public class EmbeddingService {
      */
     @PostConstruct
     public void init() {
-        log.info("=== EmbeddingService initialized === {}", LocalDateTime.now());
+        log.info(box("EmbeddingService initialized and ready")
+            + lbl("Layer",   "SERVICE → EmbeddingService")
+            + lbl("ANALOGY", "Embedding model interface armed and ready"));
     }
 
     /**
@@ -71,7 +70,21 @@ public class EmbeddingService {
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                 .build();
 
+        log.info(box("[OLLAMA] PROMPT SENT")
+            + lbl("Layer",    "SERVICE → EmbeddingService")
+            + lbl("Model",    embedModel)
+            + lbl("Endpoint", "/api/embeddings")
+            + lbl("Input",    text.length() + " chars"));
+
+        long embedStart = System.currentTimeMillis();
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        long embedDurationMs = System.currentTimeMillis() - embedStart;
+
+        log.info(box("[OLLAMA] RESPONSE RECEIVED")
+            + lbl("Layer",    "SERVICE → EmbeddingService")
+            + lbl("Status",   response.statusCode())
+            + lbl("Body",     response.body().length() + " chars")
+            + lbl("Duration", embedDurationMs + "ms"));
 
         JsonNode root = objectMapper.readTree(response.body());
         JsonNode embeddingNode = root.get("embedding");
@@ -81,8 +94,13 @@ public class EmbeddingService {
             embedding[i] = (float) embeddingNode.get(i).asDouble();
         }
 
-        log.info("Generated embedding of dimension {} for text snippet: \"{}...\"",
-                embedding.length, text.length() > 40 ? text.substring(0, 40) : text);
+        StringBuilder preview = new StringBuilder();
+        for (int p = 0; p < Math.min(5, embedding.length); p++) {
+            if (p > 0) preview.append(", ");
+            preview.append(String.format("%.4f", embedding[p]));
+        }
+        log.info("[SERVICE → EmbeddingService] OUTPUT: vectorDimensions={} | preview=[{}]...",
+                embedding.length, preview);
         return embedding;
     }
 
@@ -119,5 +137,19 @@ public class EmbeddingService {
     public String generateEmbeddingAsString(String text) throws IOException, InterruptedException {
         float[] embedding = generateEmbedding(text);
         return embeddingToString(embedding);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  Log formatting helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static final String BOX_H = "═".repeat(76);
+
+    private static String box(String title) {
+        return "\n╔" + BOX_H + "╗\n║  " + String.format("%-74s", title) + "║\n╚" + BOX_H + "╝";
+    }
+
+    private static String lbl(String label, Object value) {
+        return "\n   " + String.format("%-11s", label) + " : " + value;
     }
 }

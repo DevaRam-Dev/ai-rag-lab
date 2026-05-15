@@ -4,6 +4,7 @@ import com.raglab.dto.QueryRequest;
 import com.raglab.dto.QueryResponse;
 import com.raglab.repository.DocChunkRepository;
 import com.raglab.service.QueryService;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -33,6 +34,13 @@ public class QueryController {
     private final QueryService        queryService;
     private final DocChunkRepository  docChunkRepository;
 
+    @PostConstruct
+    public void init() {
+        log.info(box("QueryController initialized and ready")
+            + lbl("Layer",   "API → QueryController")
+            + lbl("ANALOGY", "Question-answering desk opened for RAG queries"));
+    }
+
     /**
      * Runs the full RAG pipeline for the submitted question.
      *
@@ -45,11 +53,17 @@ public class QueryController {
      */
     @PostMapping("/query")
     public ResponseEntity<QueryResponse> query(@RequestBody QueryRequest request) {
-        log.info("POST /api/query — question: \"{}\"", request.getQuestion());
+        long start = System.currentTimeMillis();
+        log.info(heavyBox("REQUEST START : POST /api/query")
+            + lbl("Layer",       "API → QueryController")
+            + lbl("Input",       "question=\"" + request.getQuestion() + "\"")
+            + lbl("Description", "Run RAG pipeline: embed → retrieve → generate answer"));
 
         try {
             QueryResponse response = queryService.answer(request.getQuestion());
-            log.info("POST /api/query — answer generated successfully");
+            log.info(heavyBox("REQUEST END : POST /api/query — 200 OK")
+                + lbl("Output",   "answerLength=" + response.getAnswer().length() + " chars, sourceChunks=" + response.getSourceChunks().size())
+                + lbl("Duration", (System.currentTimeMillis() - start) + "ms"));
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("POST /api/query — query failed: {}", e.getMessage(), e);
@@ -71,9 +85,37 @@ public class QueryController {
      */
     @GetMapping("/documents")
     public ResponseEntity<List<String>> listDocuments() {
-        log.info("GET /api/documents — fetching distinct filenames");
+        long start = System.currentTimeMillis();
+        log.info(heavyBox("REQUEST START : GET /api/documents")
+            + lbl("Layer",       "API → QueryController")
+            + lbl("Input",       "none")
+            + lbl("Description", "Return list of distinct ingested PDF filenames"));
+
         List<String> filenames = docChunkRepository.findDistinctFilenames();
-        log.info("GET /api/documents — returning {} documents", filenames.size());
+
+        log.info(heavyBox("REQUEST END : GET /api/documents — 200 OK")
+            + lbl("Output",   filenames.size() + " document(s) returned")
+            + lbl("Duration", (System.currentTimeMillis() - start) + "ms"));
         return ResponseEntity.ok(filenames);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  Log formatting helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static final String HEAVY_BAR = "█".repeat(78);
+
+    private static String heavyBox(String title) {
+        return "\n" + HEAVY_BAR + "\n█  " + String.format("%-74s", title) + "█\n" + HEAVY_BAR;
+    }
+
+    private static final String BOX_H = "═".repeat(76);
+
+    private static String box(String title) {
+        return "\n╔" + BOX_H + "╗\n║  " + String.format("%-74s", title) + "║\n╚" + BOX_H + "╝";
+    }
+
+    private static String lbl(String label, Object value) {
+        return "\n   " + String.format("%-11s", label) + " : " + value;
     }
 }

@@ -18,7 +18,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -56,7 +55,10 @@ public class QueryService {
      */
     @PostConstruct
     public void init() {
-        log.info("=== QueryService initialized === {}", LocalDateTime.now());
+        log.info(box("QueryService initialized and ready")
+            + lbl("Layer",   "SERVICE → QueryService")
+            + lbl("TopK",    TOP_K)
+            + lbl("ANALOGY", "RAG query pipeline armed and ready"));
     }
 
     /**
@@ -80,20 +82,36 @@ public class QueryService {
      * @throws InterruptedException if an HTTP call is interrupted
      */
     public QueryResponse answer(String question) throws IOException, InterruptedException {
-        log.info("Query received: \"{}\"", question);
+        log.info(box("STEP 1 : Embed question")
+            + lbl("Layer",    "SERVICE → QueryService")
+            + lbl("Input",    "question=\"" + question + "\"")
+            + lbl("Next",     "EmbeddingService.generateEmbedding"));
 
-        String queryEmbedding = embeddingService.generateEmbeddingAsString(question);
+        float[] qEmbeddingArr = embeddingService.generateEmbedding(question);
+        String queryEmbedding = embeddingService.embeddingToString(qEmbeddingArr);
+
+        log.info(box("STEP 2 : Retrieve top-" + TOP_K + " chunks via pgvector")
+            + lbl("Layer",    "SERVICE → QueryService")
+            + lbl("Input",    "questionEmbeddingDimensions=" + qEmbeddingArr.length)
+            + lbl("Next",     "DocChunkRepository.findTopChunksByEmbedding"));
+
         List<DocChunk> topChunks = docChunkRepository.findTopChunksByEmbedding(queryEmbedding, TOP_K);
-        log.info("Retrieved {} chunks for similarity search", topChunks.size());
+        log.info("[SERVICE → QueryService] retrieved {} chunks from pgvector", topChunks.size());
 
         List<String> sourceTexts = topChunks.stream()
                 .map(DocChunk::getContent)
                 .collect(Collectors.toList());
 
         String prompt = buildPrompt(sourceTexts, question);
+
+        log.info(box("STEP 3 : Generate answer via Ollama LLM")
+            + lbl("Layer",    "SERVICE → QueryService")
+            + lbl("Input",    "promptLength=" + prompt.length() + " chars, chunks=" + topChunks.size())
+            + lbl("Next",     "callOllamaGenerate"));
+
         String answer = callOllamaGenerate(prompt);
 
-        log.info("Answer generated — length: {} characters", answer.length());
+        log.info("[SERVICE → QueryService] OUTPUT: answerLength={} chars", answer.length());
         return QueryResponse.builder()
                 .answer(answer)
                 .sourceChunks(sourceTexts)
@@ -145,7 +163,22 @@ public class QueryService {
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                 .build();
 
+        log.info(box("[OLLAMA] PROMPT SENT")
+            + lbl("Layer",    "SERVICE → QueryService")
+            + lbl("Model",    llmModel)
+            + lbl("Endpoint", "/api/generate")
+            + lbl("Prompt",   prompt.length() + " chars")
+            + lbl("Stream",   "true"));
+
+        long ollamaStart = System.currentTimeMillis();
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        long ollamaDurationMs = System.currentTimeMillis() - ollamaStart;
+
+        log.info(box("[OLLAMA] RESPONSE RECEIVED")
+            + lbl("Layer",    "SERVICE → QueryService")
+            + lbl("Status",   response.statusCode())
+            + lbl("Body",     response.body().length() + " chars")
+            + lbl("Duration", ollamaDurationMs + "ms"));
 
         return parseStreamedResponse(response.body());
     }
@@ -183,5 +216,19 @@ public class QueryService {
         }
 
         return answer.toString();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  Log formatting helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static final String BOX_H = "═".repeat(76);
+
+    private static String box(String title) {
+        return "\n╔" + BOX_H + "╗\n║  " + String.format("%-74s", title) + "║\n╚" + BOX_H + "╝";
+    }
+
+    private static String lbl(String label, Object value) {
+        return "\n   " + String.format("%-11s", label) + " : " + value;
     }
 }

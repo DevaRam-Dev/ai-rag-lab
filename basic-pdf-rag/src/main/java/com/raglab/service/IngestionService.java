@@ -9,7 +9,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -35,7 +34,9 @@ public class IngestionService {
      */
     @PostConstruct
     public void init() {
-        log.info("=== IngestionService initialized === {}", LocalDateTime.now());
+        log.info(box("IngestionService initialized and ready")
+            + lbl("Layer",   "SERVICE → IngestionService")
+            + lbl("ANALOGY", "PDF processing pipeline armed and ready"));
     }
 
     /**
@@ -59,14 +60,30 @@ public class IngestionService {
      */
     public int ingestPdf(MultipartFile file) throws IOException, InterruptedException {
         String filename = file.getOriginalFilename();
-        log.info("Ingestion started — file: {}, size: {} bytes", filename, file.getSize());
 
-        List<String> chunks = pdfChunkingService.extractAndChunk(file.getInputStream());
-        log.info("Chunking complete — {} total chunks produced from '{}'", chunks.size(), filename);
+        // ── STEP 1: Extract text and chunk ───────────────────────────────────────
+        long step1Start = System.currentTimeMillis();
+        log.info(box("STEP 1 : Extract Text and Chunk PDF")
+            + lbl("Layer",       "SERVICE → IngestionService")
+            + lbl("Input",       "filename=" + filename + ", size=" + file.getSize() + " bytes")
+            + lbl("Description", "PDFBox extracts full text; sliding-window chunker splits into chunks"));
+
+        List<String> chunks = pdfChunkingService.extractAndChunk(file.getInputStream(), filename);
+        long step1Ms = System.currentTimeMillis() - step1Start;
+
+        log.info("[DOC] CHUNKS CREATED | filename={} | chunkCount={} | strategy=sliding-window | duration={}ms",
+                filename, chunks.size(), step1Ms);
+
+        // ── STEP 2: Embed each chunk and persist ─────────────────────────────────
+        long step2Start = System.currentTimeMillis();
+        log.info(box("STEP 2 : Embed Chunks and Persist to PostgreSQL")
+            + lbl("Layer",       "SERVICE → IngestionService")
+            + lbl("Input",       chunks.size() + " chunks from '" + filename + "'")
+            + lbl("Description", "nomic-embed-text generates vector per chunk; each saved to doc_chunks table"));
 
         for (int i = 0; i < chunks.size(); i++) {
-            String chunkText      = chunks.get(i);
-            String embeddingStr   = embeddingService.generateEmbeddingAsString(chunkText);
+            String chunkText    = chunks.get(i);
+            String embeddingStr = embeddingService.generateEmbeddingAsString(chunkText);
 
             DocChunk entity = DocChunk.builder()
                     .filename(filename)
@@ -76,12 +93,32 @@ public class IngestionService {
                     .build();
 
             docChunkRepository.save(entity);
-            log.info("Saved chunk {}/{} from '{}' — preview: \"{}...\"",
+            log.info("[DB] INSERT | table=doc_chunks | chunk={}/{} | file={} | preview=\"{}...\"",
                     i + 1, chunks.size(), filename,
                     chunkText.length() > 50 ? chunkText.substring(0, 50) : chunkText);
         }
 
-        log.info("Ingestion complete — {} chunks saved for '{}'", chunks.size(), filename);
+        long step2Ms = System.currentTimeMillis() - step2Start;
+
+        // ── STEP 3: Complete ──────────────────────────────────────────────────────
+        log.info(box("STEP 3 : Ingestion Complete")
+            + lbl("Layer",       "SERVICE → IngestionService")
+            + lbl("Output",      chunks.size() + " chunks saved for '" + filename + "'")
+            + lbl("Duration",    step2Ms + "ms (embedding + persist loop)"));
         return chunks.size();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  Log formatting helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static final String BOX_H = "═".repeat(76);
+
+    private static String box(String title) {
+        return "\n╔" + BOX_H + "╗\n║  " + String.format("%-74s", title) + "║\n╚" + BOX_H + "╝";
+    }
+
+    private static String lbl(String label, Object value) {
+        return "\n   " + String.format("%-11s", label) + " : " + value;
     }
 }

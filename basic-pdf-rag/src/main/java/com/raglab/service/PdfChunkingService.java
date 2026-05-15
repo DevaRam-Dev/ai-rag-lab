@@ -8,7 +8,6 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -34,7 +33,10 @@ public class PdfChunkingService {
      */
     @PostConstruct
     public void init() {
-        log.info("=== PdfChunkingService initialized === {}", LocalDateTime.now());
+        log.info(box("PdfChunkingService initialized and ready")
+            + lbl("Layer",   "SERVICE → PdfChunkingService")
+            + lbl("Config",  "chunkSize=" + CHUNK_SIZE + ", overlap=" + CHUNK_OVERLAP)
+            + lbl("ANALOGY", "Document shredder configured and standing by"));
     }
 
     /**
@@ -49,10 +51,13 @@ public class PdfChunkingService {
      * @throws IOException if PDFBox cannot parse the supplied stream
      */
     public String extractTextFromPdf(InputStream pdfStream) throws IOException {
+        log.info(box("extractTextFromPdf — loading PDF via PDFBox")
+            + lbl("Layer",       "SERVICE → PdfChunkingService")
+            + lbl("Description", "Extract full text from PDF input stream"));
         try (PDDocument document = PDDocument.load(pdfStream)) {
             PDFTextStripper stripper = new PDFTextStripper();
             String text = stripper.getText(document);
-            log.info("PDF text extraction complete — {} characters extracted", text.length());
+            log.info("[SERVICE → PdfChunkingService] extracted | chars={}", text.length());
             return text;
         }
     }
@@ -80,7 +85,8 @@ public class PdfChunkingService {
             start += step;
         }
 
-        log.info("Text split into {} chunks (size={}, overlap={})", chunks.size(), CHUNK_SIZE, CHUNK_OVERLAP);
+        log.info("[SERVICE → PdfChunkingService] chunkText | chunks={} | size={} | overlap={}",
+                chunks.size(), CHUNK_SIZE, CHUNK_OVERLAP);
         return chunks;
     }
 
@@ -93,8 +99,38 @@ public class PdfChunkingService {
      * @return ordered list of text chunks ready for embedding
      * @throws IOException if PDFBox cannot parse the supplied stream
      */
-    public List<String> extractAndChunk(InputStream pdfStream) throws IOException {
-        String fullText = extractTextFromPdf(pdfStream);
-        return chunkText(fullText);
+    public List<String> extractAndChunk(InputStream pdfStream, String filename) throws IOException {
+        int available = pdfStream.available();
+        log.info(box("extractAndChunk — extract text and split into chunks")
+            + lbl("Layer",       "SERVICE → PdfChunkingService")
+            + lbl("Input",       "filename=" + filename + ", streamSize=" + available + " bytes")
+            + lbl("Description", "Load PDF → strip text → sliding-window chunk"));
+
+        String fullText;
+        int numPages;
+        try (PDDocument document = PDDocument.load(pdfStream)) {
+            numPages = document.getNumberOfPages();
+            PDFTextStripper stripper = new PDFTextStripper();
+            fullText = stripper.getText(document);
+        }
+
+        List<String> chunks = chunkText(fullText);
+        log.info("[SERVICE → PdfChunkingService] OUTPUT: filename={} | pages={} | chunks={} | chunkSize={} | overlap={}",
+                filename, numPages, chunks.size(), CHUNK_SIZE, CHUNK_OVERLAP);
+        return chunks;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  Log formatting helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static final String BOX_H = "═".repeat(76);
+
+    private static String box(String title) {
+        return "\n╔" + BOX_H + "╗\n║  " + String.format("%-74s", title) + "║\n╚" + BOX_H + "╝";
+    }
+
+    private static String lbl(String label, Object value) {
+        return "\n   " + String.format("%-11s", label) + " : " + value;
     }
 }
